@@ -1,0 +1,40 @@
+name: iOS Build (Debug Only)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ios-build:
+    name: Build iOS App
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install JS dependencies
+        run: npm install
+
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods
+          cd ios && pod install
+
+      - name: Build iOS App
+        run: |
+          cd ios
+          xcodebuild \
+            -workspace demo.xcworkspace \
+            -scheme demo \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            clean build
