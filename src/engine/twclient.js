@@ -1,0 +1,41 @@
+import { Client as TwilioChatClient } from '@twilio/conversations';
+import { getToken } from './token'; // Adjust the import path as necessary
+
+
+let twilioClient = null;
+
+export const getTwilioClient = () => {
+  if (!twilioClient) throw new Error('Twilio client not initialized');
+  return twilioClient;
+};
+
+export const initTwilioClient = async () => {
+  if (twilioClient) return twilioClient;
+  const token = await fetchRefreshedTwilioToken();
+  if (!token) throw new Error('Failed to fetch Twilio token');
+
+  twilioClient = new TwilioChatClient(token);
+
+  twilioClient.on('tokenAboutToExpire', async () => {
+    const refreshedToken = await fetchRefreshedTwilioToken();
+    twilioClient.updateToken(refreshedToken);
+  });
+
+  return twilioClient;
+};
+export const fetchRefreshedTwilioToken = async () => {
+  const auth_token = await getToken("token");
+  const response = await fetch('http://localhost:8080/api/auth/twilio',
+    {
+        headers: { 
+          Authorization: `Bearer ${auth_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+  if (!response.ok) {
+    throw new Error('Failed to fetch Twilio token');
+  }
+  const data = await response.json();
+  console.log("Response from Twilio token endpoint: ",data);
+  return data.token;
+};
