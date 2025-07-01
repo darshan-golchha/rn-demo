@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { getTwilioClient } from '../engine/twclient';
 import { launchImageLibrary } from 'react-native-image-picker';
-import DocumentPicker from 'react-native-document-picker';
+import DocumentPicker from '@react-native-documents/picker';
 import ActionSheet from 'react-native-action-sheet';
 
 const { width } = Dimensions.get('window');
@@ -154,7 +154,7 @@ const ChatScreen = ({ route, navigation }) => {
   const fetchAvailableUsers = async () => {
     try {
       const token = await require('../engine/token').getToken("token");
-      const response = await fetch('http://localhost:8080/api/users/all', {
+      const response = await fetch('http://34.131.11.108/api/users/all', {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',

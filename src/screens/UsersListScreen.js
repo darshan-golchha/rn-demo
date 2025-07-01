@@ -36,7 +36,7 @@ const UserListScreen = ({ navigation }) => {
       setError(null);
 
       const token = await getToken("token");
-      const response = await fetch('http://localhost:8080/api/users/all', {
+      const response = await fetch('http://34.131.11.108/api/users/all', {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',

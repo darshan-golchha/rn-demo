@@ -10,10 +10,12 @@ import {
 import * as Keychain from 'react-native-keychain';
 import { saveToken } from '../engine/token';
 import { initTwilioClient } from '../engine/twclient';
+import Config from "react-native-config";
 
 export default function LoginScreen({ navigation, setIsLoggedIn }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const url = Config.API_URL;
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -22,7 +24,8 @@ export default function LoginScreen({ navigation, setIsLoggedIn }) {
     }
 
     try {
-      const response = await fetch(`http://localhost:8080/api/auth/login`, {
+      console.log('Attempting to login with:', { email, password }); // Add this line for debugging
+      const response = await fetch(`http://34.131.11.108/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -32,21 +35,22 @@ export default function LoginScreen({ navigation, setIsLoggedIn }) {
           passWord: password,
         }),
       });
-
+      console.log('Login response:', response); // Add this line for debugging
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Login failed');
       }
-
       const data = await response.json();
       const token = data.token;
 
       // Store JWT token (e.g., using AsyncStorage or react-native-keychain)
       await saveToken("token", token);
+      console.log('Token saved successfully:', token);
       await initTwilioClient();
+      console.log('Twilio client initialized successfully');
       setIsLoggedIn(true);
     } catch (error) {
-      Alert.alert('Login Failed', error.message);
+      Alert.alert(`Login Failed`, error.message);
     }
   };
 

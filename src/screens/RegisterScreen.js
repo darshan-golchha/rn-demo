@@ -21,7 +21,7 @@ export default function RegisterScreen({ navigation, setIsLoggedIn }) {
     }
 
     try {
-      const response = await fetch(`http://localhost:8080/api/auth/register`, {
+      const response = await fetch(`http://34.131.11.108/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -42,7 +42,7 @@ export default function RegisterScreen({ navigation, setIsLoggedIn }) {
       Alert.alert('Success', 'Registration successful. Please login.');
       navigation.navigate('Login');
       
-      const loginResponse = await fetch(`http://localhost:8080/api/auth/login`, {
+      const loginResponse = await fetch(`http://34.131.11.108/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userName: email, passWord: password }),
