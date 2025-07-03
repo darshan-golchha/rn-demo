@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo, memo } from 'react';
 import {
   View,
   TextInput,
@@ -22,8 +22,191 @@ import { getTwilioClient } from '../engine/twclient';
 import { launchImageLibrary } from 'react-native-image-picker';
 import DocumentPicker from '@react-native-documents/picker';
 import ActionSheet from 'react-native-action-sheet';
+import { useHeaderHeight } from '@react-navigation/elements';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
+
+// Media URL cache to prevent repeated API calls
+class MediaCache {
+  static cache = new Map();
+  
+  static get(key) {
+    return this.cache.get(key);
+  }
+  
+  static set(key, value) {
+    // Limit cache size to prevent memory issues
+    if (this.cache.size > 100) {
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+    this.cache.set(key, value);
+  }
+  
+  static clear() {
+    this.cache.clear();
+  }
+}
+
+// Memoized Media Message Component
+const MediaMessage = memo(({ item }) => {
+  const [mediaUrl, setMediaUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    
+    // Check if URL is already cached
+    const cachedUrl = MediaCache.get(item.sid);
+    if (cachedUrl) {
+      setMediaUrl(cachedUrl);
+      setLoading(false);
+      return;
+    }
+
+    const fetchMediaUrl = async () => {
+      try {
+        if (item.type === 'media') {
+          const media = await item.media;
+          const url = await media.getContentTemporaryUrl();
+          
+          // Cache the URL
+          MediaCache.set(item.sid, url);
+          
+          if (isMounted) {
+            setMediaUrl(url);
+            setLoading(false);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch media URL', e);
+        if (isMounted) {
+          setError(true);
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchMediaUrl();
+    return () => { isMounted = false; };
+  }, [item.sid]); // Only depend on item.sid, not the entire item
+
+  if (loading) {
+    return (
+      <View style={{ alignItems: 'center', justifyContent: 'center', height: 120 }}>
+        <ActivityIndicator size="small" color="#007AFF" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.mediaPlaceholder}>
+        <Text style={styles.mediaText}>Failed to load media</Text>
+      </View>
+    );
+  }
+
+  if (item.media?.contentType?.startsWith('image/')) {
+    return (
+      <Image
+        source={{ uri: mediaUrl }}
+        style={styles.messageImage}
+        resizeMode="cover"
+      />
+    );
+  }
+
+  if (item.media?.contentType === 'application/pdf') {
+    return (
+      <TouchableOpacity
+        onPress={() => Linking.openURL(mediaUrl)}
+        style={{
+          padding: 12,
+          backgroundColor: '#F3F4F6',
+          borderRadius: 12,
+          marginBottom: 4,
+          flexDirection: 'row',
+          alignItems: 'center',
+        }}
+      >
+        <Text style={{ fontSize: 18, marginRight: 8 }}>📄</Text>
+        <Text
+          style={{
+            color: '#007AFF',
+            textDecorationLine: 'underline',
+            fontWeight: '500',
+            flexShrink: 1,
+          }}
+          numberOfLines={1}
+        >
+          {item.media.filename || 'Open PDF'}
+        </Text>
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <View style={styles.mediaPlaceholder}>
+      <Text style={styles.mediaText}>Unsupported file type</Text>
+    </View>
+  );
+});
+
+// Memoized Message Item Component
+const MessageItem = memo(({ item, isGroup, currentUserId }) => {
+  const isOwn = item.author === currentUserId;
+  
+  // Memoize expensive calculations
+  const formattedTime = useMemo(() => {
+    if (!item.dateCreated) return '';
+    const date = new Date(item.dateCreated);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }, [item.dateCreated]);
+
+  return (
+    <View
+      style={[
+        styles.messageContainer,
+        isOwn ? styles.ownMessageContainer : styles.otherMessageContainer,
+      ]}
+    >
+      {isGroup && !isOwn && (
+        <Text style={styles.senderName}>{item.author}</Text>
+      )}
+      
+      <View
+        style={[
+          styles.messageBubble,
+          isOwn ? styles.ownMessageBubble : styles.otherMessageBubble,
+        ]}
+      >
+        {item.type === 'media' && item.media ? (
+          <MediaMessage item={item} />
+        ) : (
+          <Text
+            style={[
+              styles.messageText,
+              isOwn ? styles.ownMessageText : styles.otherMessageText,
+            ]}
+          >
+            {item.body}
+          </Text>
+        )}
+        <Text
+          style={[
+            styles.timestamp,
+            isOwn ? styles.ownTimestamp : styles.otherTimestamp,
+          ]}
+        >
+          {formattedTime}
+        </Text>
+      </View>
+    </View>
+  );
+});
 
 const ChatScreen = ({ route, navigation }) => {
   const { 
@@ -36,7 +219,7 @@ const ChatScreen = ({ route, navigation }) => {
   } = route.params;
   
   const [conversation, setConversation] = useState(null);
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([]); // Use stable state instead of ref
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [groupInfo, setGroupInfo] = useState({
@@ -53,8 +236,11 @@ const ChatScreen = ({ route, navigation }) => {
 
   const flatListRef = useRef(null);
   const client = getTwilioClient();
-  const messagesRef = useRef([]); // Store messages here
-  const [messagesVersion, setMessagesVersion] = useState(0); // Dummy state to trigger FlatList update
+  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
+
+  // Memoize current user identity
+  const currentUserId = useMemo(() => client.user.identity, [client.user.identity]);
 
   useEffect(() => {
     const setup = async () => {
@@ -62,8 +248,7 @@ const ChatScreen = ({ route, navigation }) => {
         const conv = await client.getConversationBySid(conversationSid);
         setConversation(conv);
         const paginator = await conv.getMessages();
-        messagesRef.current = paginator.items;
-        setMessagesVersion(v => v + 1); // Trigger FlatList update
+        setMessages(paginator.items);
 
         if (isGroup) {
           const participants = await conv.getParticipants();
@@ -75,8 +260,7 @@ const ChatScreen = ({ route, navigation }) => {
         }
 
         conv.on('messageAdded', (msg) => {
-          messagesRef.current = [...messagesRef.current, msg];
-          setMessagesVersion(v => v + 1); // Trigger FlatList update
+          setMessages(prevMessages => [...prevMessages, msg]);
           setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true });
           }, 100);
@@ -223,6 +407,7 @@ const ChatScreen = ({ route, navigation }) => {
       Alert.alert('Error', 'Failed to send image');
     }
   };
+
   const sendFileMessage = async () => {
     try {
       const res = await DocumentPicker.pickSingle({
@@ -351,16 +536,6 @@ const ChatScreen = ({ route, navigation }) => {
     );
   };
 
-  const formatTime = (dateCreated) => {
-    if (!dateCreated) return '';
-    const date = new Date(dateCreated);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const isMyMessage = (message) => {
-    return message.author === client.user.identity;
-  };
-
   const toggleUserSelection = (userName) => {
     setSelectedUsers(prev => 
       prev.includes(userName) 
@@ -368,129 +543,20 @@ const ChatScreen = ({ route, navigation }) => {
         : [...prev, userName]
     );
   };
-  const MediaMessage = ({ item }) => {
-    const [mediaUrl, setMediaUrl] = useState(null);
-    const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-      let isMounted = true;
-      const fetchMediaUrl = async () => {
-        try {
-          if (item.type === 'media') {
-            const media = await item.media;
-            const url = await media.getContentTemporaryUrl();
-            setMediaUrl(url);
-          }
-        } catch (e) {
-          console.error('Failed to fetch media URL', e);
-        } finally {
-          if (isMounted) setLoading(false);
-        }
-      };
-      fetchMediaUrl();
-      return () => { isMounted = false; };
-    }, []);
+  // Memoized callbacks for FlatList optimization
+  const renderMessage = useCallback(({ item }) => (
+    <MessageItem 
+      item={item} 
+      isGroup={isGroup} 
+      currentUserId={currentUserId}
+    />
+  ), [isGroup, currentUserId]);
 
-    if (loading) {
-      return (
-        <View style={{ alignItems: 'center', justifyContent: 'center', height: 120 }}>
-          <ActivityIndicator size="small" color="#007AFF" />
-        </View>
-      );
-    }
-    if (item.media?.contentType?.startsWith('image/')) {
-      return (
-        <Image
-          source={{ uri: mediaUrl }}
-          style={styles.messageImage}
-          resizeMode="cover"
-        />
-      );
-    }
+  const keyExtractor = useCallback((item) => item.sid, []);
 
-    if (item.media?.contentType === 'application/pdf') {
-      return (
-        <TouchableOpacity
-          onPress={() => Linking.openURL(mediaUrl)}
-          style={{
-            padding: 12,
-            backgroundColor: '#F3F4F6',
-            borderRadius: 12,
-            marginBottom: 4,
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{ fontSize: 18, marginRight: 8 }}>📄</Text>
-          <Text
-            style={{
-              color: '#007AFF',
-              textDecorationLine: 'underline',
-              fontWeight: '500',
-              flexShrink: 1,
-            }}
-            numberOfLines={1}
-          >
-            {item.media.filename || 'Open PDF'}
-          </Text>
-        </TouchableOpacity>
-      );
-    }
-    return (
-      <View style={styles.mediaPlaceholder}>
-        <Text style={styles.mediaText}>Unsupported file type</Text>
-      </View>
-    );
-  };
-
-  const renderMessage = ({ item }) => {
-    const isOwn = isMyMessage(item);
-
-    return (
-      <View
-        style={[
-          styles.messageContainer,
-          isOwn ? styles.ownMessageContainer : styles.otherMessageContainer,
-        ]}
-      >
-
-        {isGroup && !isOwn && (
-          <Text style={styles.senderName}>{item.author}</Text>
-        )}
-        
-        <View
-          style={[
-            styles.messageBubble,
-            isOwn ? styles.ownMessageBubble : styles.otherMessageBubble,
-          ]}
-        >
-          {item.type === 'media' && item.media ? (
-            <MediaMessage item={item} />
-          ) : (
-            <Text
-              style={[
-                styles.messageText,
-                isOwn ? styles.ownMessageText : styles.otherMessageText,
-              ]}
-            >
-              {item.body}
-            </Text>
-          )}
-          <Text
-            style={[
-              styles.timestamp,
-              isOwn ? styles.ownTimestamp : styles.otherTimestamp,
-            ]}
-          >
-            {formatTime(item.dateCreated)}
-          </Text>
-        </View>
-      </View>
-    );
-  };
-
-  const renderGroupInfoParticipant = ({ item }) => {
-    const isCurrentUser = item === client.user.identity;
+  const renderGroupInfoParticipant = useCallback(({ item }) => {
+    const isCurrentUser = item === currentUserId;
     
     return (
       <View style={styles.participantItem}>
@@ -514,9 +580,9 @@ const ChatScreen = ({ route, navigation }) => {
         )}
       </View>
     );
-  };
+  }, [currentUserId, removeParticipant]);
 
-  const renderAvailableUser = ({ item }) => {
+  const renderAvailableUser = useCallback(({ item }) => {
     const isSelected = selectedUsers.includes(item.userName);
     
     return (
@@ -538,7 +604,10 @@ const ChatScreen = ({ route, navigation }) => {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [selectedUsers, toggleUserSelection]);
+
+  const participantKeyExtractor = useCallback((item) => item, []);
+  const userKeyExtractor = useCallback((item) => item.id?.toString() || item.userName, []);
 
   return (
     <>
@@ -547,22 +616,32 @@ const ChatScreen = ({ route, navigation }) => {
         <KeyboardAvoidingView
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
         >
-          <FlatList
-            ref={flatListRef}
-            data={messagesRef.current}
-            extraData={messagesVersion} // FlatList will re-render when this changes
-            keyExtractor={(item) => item.sid}
-            renderItem={renderMessage}
-            contentContainerStyle={styles.messagesList}
-            showsVerticalScrollIndicator={false}
-            onContentSizeChange={() =>
-              flatListRef.current?.scrollToEnd({ animated: false })
-            }
-          />
+          <View style={styles.messagesContainer}>
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={keyExtractor}
+              renderItem={renderMessage}
+              contentContainerStyle={styles.messagesList}
+              showsVerticalScrollIndicator={false}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              initialNumToRender={20}
+              updateCellsBatchingPeriod={100}
+              onContentSizeChange={() =>
+                flatListRef.current?.scrollToEnd({ animated: false })
+              }
+              maintainVisibleContentPosition={{
+                minIndexForVisible: 0,
+                autoscrollToTopThreshold: 10,
+              }}
+            />
+          </View>
 
-          <View style={styles.inputContainer}>
+          <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
             <View style={styles.inputWrapperEnhanced}>
               <TouchableOpacity
                 style={styles.attachButtonEnhanced}
@@ -664,7 +743,7 @@ const ChatScreen = ({ route, navigation }) => {
                 </View>
                 <FlatList
                   data={groupInfo.participants}
-                  keyExtractor={(item) => item}
+                  keyExtractor={participantKeyExtractor}
                   renderItem={renderGroupInfoParticipant}
                   scrollEnabled={false}
                 />
@@ -723,13 +802,14 @@ const ChatScreen = ({ route, navigation }) => {
 
             <FlatList
               data={availableUsers}
-              keyExtractor={(item) => item.id?.toString() || item.userName}
+              keyExtractor={userKeyExtractor}
               renderItem={renderAvailableUser}
               showsVerticalScrollIndicator={false}
               style={styles.userList}
             />
           </SafeAreaView>
         </Modal>
+
         <Modal
           visible={showEditGroupName}
           animationType="slide"
@@ -787,6 +867,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  messagesContainer: {
+    flex: 1,
+  },
   headerTitle: {
     alignItems: 'center',
   },
@@ -809,8 +892,9 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingBottom: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+    flexGrow: 1,
   },
   messageContainer: {
     flexDirection: 'column',
@@ -879,18 +963,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
   },
-  mediaIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#E5E7EB',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  mediaIcon: {
-    fontSize: 14,
-  },
   mediaText: {
     fontSize: 15,
     color: '#6B7280',
@@ -899,20 +971,10 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 16,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 24,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   inputWrapperEnhanced: {
     flexDirection: 'row',
@@ -929,15 +991,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  attachButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#6B7280',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 4,
-  },
   attachButtonEnhanced: {
     width: 36,
     height: 36,
@@ -947,31 +1000,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 6,
   },
-  attachIcon: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    fontWeight: '300',
-    lineHeight: 18,
-  },
   attachIconEnhanced: {
     fontSize: 22,
     color: '#fff',
     fontWeight: 'bold',
     marginTop: -2,
-  },
-  textInputContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    maxHeight: 120,
-    justifyContent: 'center',
-  },
-  textInput: {
-    fontSize: 16,
-    color: '#111827',
-    fontWeight: '400',
-    lineHeight: 22,
-    minHeight: 22,
   },
   textInputEnhanced: {
     flex: 1,
@@ -983,18 +1016,8 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     paddingHorizontal: 10,
     backgroundColor: 'transparent',
-  },
-  sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 4,
-    backgroundColor: '#F3F4F6',
-  },
-  sendButtonActive: {
-    backgroundColor: '#111827',
+    paddingTop: Platform.OS === 'ios' ? 7 : 6,
+    paddingBottom: Platform.OS === 'ios' ? 7 : 6,
   },
   sendButtonEnhanced: {
     width: 36,
@@ -1008,28 +1031,19 @@ const styles = StyleSheet.create({
   sendButtonActiveEnhanced: {
     backgroundColor: '#111827',
   },
-  sendIcon: {
-    fontSize: 16,
-    color: '#9CA3AF',
-    fontWeight: '400',
-    lineHeight: 16,
-  },
   sendIconEnhanced: {
-    fontSize: 18,
+    fontSize: 20,
     color: '#9CA3AF',
-    fontWeight: 'bold',
-    lineHeight: 18,
-  },
-  sendIconActive: {
-    color: '#FFFFFF',
+    fontWeight: '600',
   },
   sendIconActiveEnhanced: {
-    color: '#fff',
+    color: '#FFFFFF',
   },
-  // Modal styles
+
+  // Modal Styles
   modalContainer: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1037,27 +1051,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    borderBottomColor: '#E5E7EB',
   },
   modalCloseButton: {
-    paddingVertical: 4,
+    padding: 4,
   },
   modalCloseText: {
     fontSize: 16,
     color: '#007AFF',
+    fontWeight: '500',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#212529',
+    color: '#111827',
+    textAlign: 'center',
   },
   modalActionButton: {
-    paddingVertical: 4,
+    padding: 4,
   },
   modalActionButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   modalActionText: {
     fontSize: 16,
@@ -1065,25 +1080,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalActionTextDisabled: {
-    color: '#6c757d',
+    color: '#9CA3AF',
   },
+
+  // Group Info Styles
   groupInfoContent: {
     flex: 1,
+    paddingHorizontal: 20,
   },
   groupInfoSection: {
-    backgroundColor: '#fff',
-    marginBottom: 20,
+    marginVertical: 16,
   },
   groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   groupAvatar: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#28a745',
+    backgroundColor: '#25D366',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -1095,67 +1114,62 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   groupInfoName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#212529',
+    color: '#111827',
     marginBottom: 4,
   },
   groupInfoSubtitle: {
     fontSize: 14,
-    color: '#6c757d',
+    color: '#6B7280',
   },
   editButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#007AFF',
-    borderRadius: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
   },
   editButtonText: {
-    color: '#fff',
     fontSize: 14,
+    color: '#007AFF',
     fontWeight: '500',
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#212529',
+    color: '#111827',
   },
   addCircleButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#28a745',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#28a745',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 3,
-    elevation: 2,
   },
   addCircleButtonText: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 20,
+    color: '#FFFFFF',
+    fontWeight: '600',
     marginTop: -2,
   },
+
+  // Participant Styles
   participantItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f8f9fa',
+    paddingHorizontal: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    marginBottom: 8,
   },
   participantInfo: {
     flexDirection: 'row',
@@ -1166,7 +1180,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1174,57 +1188,45 @@ const styles = StyleSheet.create({
   participantAvatarText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: '#6B7280',
   },
   participantName: {
     fontSize: 16,
-    color: '#212529',
     fontWeight: '500',
+    color: '#111827',
   },
   removeButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#dc3545',
-    borderRadius: 6,
+    borderRadius: 16,
+    backgroundColor: '#FEE2E2',
   },
   removeButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
+    color: '#DC2626',
     fontWeight: '500',
   },
-  leaveGroupButton: {
-    margin: 20,
-    paddingVertical: 16,
-    backgroundColor: '#dc3545',
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  leaveGroupText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+
+  // Available Users Styles
   selectedCountText: {
     fontSize: 14,
-    color: '#6c757d',
+    color: '#6B7280',
     textAlign: 'center',
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    marginVertical: 16,
   },
   userList: {
     flex: 1,
-    backgroundColor: '#fff',
+    paddingHorizontal: 20,
   },
   availableUserItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f8f9fa',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    marginBottom: 8,
   },
   userInfo: {
     flexDirection: 'row',
@@ -1235,7 +1237,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#6c757d',
+    backgroundColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1243,22 +1245,21 @@ const styles = StyleSheet.create({
   userAvatarText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: '#6B7280',
   },
   availableUserName: {
     fontSize: 16,
-    color: '#212529',
     fontWeight: '500',
+    color: '#111827',
   },
   checkbox: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#6c757d',
+    borderColor: '#D1D5DB',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'transparent',
   },
   checkboxSelected: {
     backgroundColor: '#007AFF',
@@ -1266,30 +1267,39 @@ const styles = StyleSheet.create({
   },
   checkmark: {
     fontSize: 14,
-    color: '#fff',
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
+
+  // Edit Group Name Styles
   editNameContainer: {
-    backgroundColor: '#fff',
-    margin: 20,
-    borderRadius: 12,
     padding: 20,
-    zIndex: 1000,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 3,
-    elevation: 2,
   },
   groupNameInput: {
     fontSize: 16,
-    color: '#212529',
-    paddingVertical: 12,
+    color: '#111827',
     paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 8,
-    backgroundColor: '#f8f9fa',
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
+  },
+
+  // Leave Group Styles
+  leaveGroupButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  leaveGroupText: {
+    fontSize: 16,
+    color: '#DC2626',
+    fontWeight: '600',
   },
 });
+
 export default ChatScreen;

@@ -642,11 +642,13 @@ const styles = StyleSheet.create({
   itemContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1, // <-- Add this line
   },
   itemDetails: {
-    flex: 1,
+    flex: 1, // <-- Add this line
     marginLeft: 12,
     justifyContent: 'center',
+    minWidth: 0, // <-- Add this line to allow text truncation
   },
   itemHeader: {
     flexDirection: 'row',
