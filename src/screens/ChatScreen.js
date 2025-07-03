@@ -236,8 +236,8 @@ const ChatScreen = ({ route, navigation }) => {
 
   const flatListRef = useRef(null);
   const client = getTwilioClient();
-  const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
 
   // Memoize current user identity
   const currentUserId = useMemo(() => client.user.identity, [client.user.identity]);
@@ -614,9 +614,9 @@ const ChatScreen = ({ route, navigation }) => {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
-          style={styles.container}
+          style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight + insets.top : 0}
         >
           <View style={styles.messagesContainer}>
             <FlatList
@@ -641,7 +641,7 @@ const ChatScreen = ({ route, navigation }) => {
             />
           </View>
 
-          <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <View style={[styles.inputContainer, { paddingBottom: insets.bottom || 8 }]}>
             <View style={styles.inputWrapperEnhanced}>
               <TouchableOpacity
                 style={styles.attachButtonEnhanced}

@@ -14,6 +14,7 @@ import {
   TextInput,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Add this import
 import { getToken } from '../engine/token';
 import { getTwilioClient } from '../engine/twclient';
 
@@ -29,6 +30,8 @@ const UserListScreen = ({ navigation }) => {
   const [groupName, setGroupName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
+
+  const insets = useSafeAreaInsets(); // <-- Add this line
 
   const fetchUsers = useCallback(async (isRefresh = false) => {
     try {
@@ -544,7 +547,10 @@ const UserListScreen = ({ navigation }) => {
       />
 
       <TouchableOpacity
-        style={styles.fab}
+        style={[
+          styles.fab,
+          { bottom: 64 + insets.bottom } // <-- Use safe area inset for bottom
+        ]}
         onPress={() => setShowGroupModal(true)}
         activeOpacity={0.8}
       >
