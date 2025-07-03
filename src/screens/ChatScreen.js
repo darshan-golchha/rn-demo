@@ -614,9 +614,9 @@ const ChatScreen = ({ route, navigation }) => {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
-          style={{ flex: 1 }}
+          style={{ flex: 1, marginBottom: insets.bottom || 8 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight + insets.top : 0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight + insets.top + 32 : 32}
         >
           <View style={styles.messagesContainer}>
             <FlatList
