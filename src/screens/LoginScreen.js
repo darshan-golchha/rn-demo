@@ -11,6 +11,7 @@ import * as Keychain from 'react-native-keychain';
 import { saveToken } from '../engine/token';
 import { initTwilioClient } from '../engine/twclient';
 import Config from "react-native-config";
+import messaging from '@react-native-firebase/messaging';
 
 export default function LoginScreen({ navigation, setIsLoggedIn }) {
   const [email, setEmail] = useState('');
@@ -24,8 +25,9 @@ export default function LoginScreen({ navigation, setIsLoggedIn }) {
     }
 
     try {
-      console.log('Attempting to login with:', { email, password }); // Add this line for debugging
+      const fcm_token = await messaging().getToken();
       const response = await fetch(`http://34.131.11.108/api/auth/login`, {
+      // const response = await fetch('http://192.168.29.196:8080/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -33,6 +35,7 @@ export default function LoginScreen({ navigation, setIsLoggedIn }) {
         body: JSON.stringify({
           userName: email,
           passWord: password,
+          fcmToken: fcm_token,
         }),
       });
       console.log('Login response:', response); // Add this line for debugging

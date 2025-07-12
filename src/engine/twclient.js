@@ -1,11 +1,13 @@
 import { Client as TwilioChatClient } from '@twilio/conversations';
-import { getToken } from './token'; // Adjust the import path as necessary
+import { getToken } from './token';
 
 
 let twilioClient = null;
 
 export const getTwilioClient = () => {
-  if (!twilioClient) throw new Error('Twilio client not initialized');
+  if (!twilioClient) {
+      throw new Error('Twilio client not initialized');
+  }
   return twilioClient;
 };
 
@@ -26,6 +28,7 @@ export const initTwilioClient = async () => {
 export const fetchRefreshedTwilioToken = async () => {
   const auth_token = await getToken("token");
   const response = await fetch('http://34.131.11.108/api/auth/twilio',
+  // const response = await fetch('http://192.168.29.196:8080/api/auth/twilio',
     {
         headers: { 
           Authorization: `Bearer ${auth_token}`,

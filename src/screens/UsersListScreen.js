@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Add this import
 import { getToken } from '../engine/token';
-import { getTwilioClient } from '../engine/twclient';
+import { getTwilioClient, initTwilioClient } from '../engine/twclient';
 
 const UserListScreen = ({ navigation }) => {
   const [users, setUsers] = useState([]);
@@ -40,6 +40,7 @@ const UserListScreen = ({ navigation }) => {
 
       const token = await getToken("token");
       const response = await fetch('http://34.131.11.108/api/users/all', {
+      // const response = await fetch('http://192.168.29.196:8080/api/users/all', {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -63,10 +64,6 @@ const UserListScreen = ({ navigation }) => {
   const fetchConversations = useCallback(async () => {
     try {
       const client = getTwilioClient();
-      if (!client) {
-        throw new Error('Twilio client not initialized');
-      }
-
       const subscribedConversations = await client.getSubscribedConversations();
       const conversationsWithDetails = await Promise.all(
         subscribedConversations.items.map(async (conv) => {
