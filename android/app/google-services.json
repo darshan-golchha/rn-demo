@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1082421094491",
+    "project_id": "convora786",
+    "storage_bucket": "convora786.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1082421094491:android:e13a86405af88d996ff77e",
+        "android_client_info": {
+          "package_name": "com.convora"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCNUCqFOKcv2s1VHHQLg9jo4nbkBoaahDE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1082421094491:android:e4deb0902d7e90386ff77e",
+        "android_client_info": {
+          "package_name": "com.demo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCNUCqFOKcv2s1VHHQLg9jo4nbkBoaahDE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
