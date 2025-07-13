@@ -28,7 +28,7 @@ export default function AppNavigator() {
   if (loading) return null; // Or a loading spinner
 
   return isLoggedIn ? (
-    <MainStack />
+    <MainStack setIsLoggedIn={setIsLoggedIn} />
   ) : (
     <AuthStack setIsLoggedIn={setIsLoggedIn} />
   );

@@ -27,7 +27,7 @@ export const initTwilioClient = async () => {
 };
 export const fetchRefreshedTwilioToken = async () => {
   const auth_token = await getToken("token");
-  const response = await fetch('http://34.131.11.108/api/auth/twilio',
+  const response = await fetch('https://conv-backend.darshangolchha.com/api/auth/twilio',
   // const response = await fetch('http://192.168.29.196:8080/api/auth/twilio',
     {
         headers: { 

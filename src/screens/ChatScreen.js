@@ -338,7 +338,7 @@ const ChatScreen = ({ route, navigation }) => {
   const fetchAvailableUsers = async () => {
     try {
       const token = await require('../engine/token').getToken("token");
-      const response = await fetch('http://34.131.11.108/api/users/all', {
+      const response = await fetch('https://conv-backend.darshangolchha.com/api/users/all', {
       // const response = await fetch('http://192.168.29.196:8080/api/users/all', {
         headers: {
           Authorization: `Bearer ${token}`,

@@ -15,10 +15,10 @@ import {
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Add this import
-import { getToken } from '../engine/token';
+import { getToken, removeToken } from '../engine/token';
 import { getTwilioClient, initTwilioClient } from '../engine/twclient';
 
-const UserListScreen = ({ navigation }) => {
+const UserListScreen = ({ navigation, setIsLoggedIn }) => {
   const [users, setUsers] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [combinedData, setCombinedData] = useState([]);
@@ -39,7 +39,7 @@ const UserListScreen = ({ navigation }) => {
       setError(null);
 
       const token = await getToken("token");
-      const response = await fetch('http://34.131.11.108/api/users/all', {
+      const response = await fetch('https://conv-backend.darshangolchha.com/api/users/all', {
       // const response = await fetch('http://192.168.29.196:8080/api/users/all', {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -337,6 +337,25 @@ const UserListScreen = ({ navigation }) => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await fetch('https://conv-backend.darshangolchha.com/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${await getToken("token")}`,
+        },
+      });
+    } catch (e) {
+      // Ignore errors for logout
+    }
+    await removeToken("token");
+    setIsLoggedIn(false);
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Login' }],
+    });
+  };
+
   const formatTime = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -524,6 +543,9 @@ const UserListScreen = ({ navigation }) => {
       <StatusBar backgroundColor="white" barStyle="dark-content" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Chats</Text>
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -626,6 +648,9 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingTop: 40,
     elevation: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 24,
@@ -915,6 +940,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginLeft: 8,
     overflow: 'hidden',
+  },
+  logoutButton: {
+    padding: 8,
+    backgroundColor: '#FF4040',
+    borderRadius: 8,
+  },
+  logoutText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
 

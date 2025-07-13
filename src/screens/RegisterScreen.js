@@ -22,7 +22,7 @@ export default function RegisterScreen({ navigation, setIsLoggedIn }) {
     }
 
     try {
-      const response = await fetch(`http://34.131.11.108/api/auth/register`, {
+      const response = await fetch(`https://conv-backend.darshangolchha.com/api/auth/register`, {
       // const response = await fetch('http://192.168.29.196:8080/api/auth/register', {
         method: 'POST',
         headers: {
@@ -44,7 +44,7 @@ export default function RegisterScreen({ navigation, setIsLoggedIn }) {
       Alert.alert('Success', 'Registration successful. Please login.');
       navigation.navigate('Login');
       const fcm_token = await messaging().getToken();
-      const loginResponse = await fetch(`http://34.131.11.108/api/auth/login`, {
+      const loginResponse = await fetch(`https://conv-backend.darshangolchha.com/api/auth/login`, {
       // const loginResponse = await fetch('http://192.168.29.196:8080/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

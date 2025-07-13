@@ -4,6 +4,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import messaging from '@react-native-firebase/messaging';
 import { Alert, Linking } from 'react-native';
 import notifee, { AndroidImportance } from '@notifee/react-native';
+import { initTwilioClient } from './src/engine/twclient';
 
 export async function requestUserPermission() {
   const permission = await messaging().hasPermission();
@@ -28,7 +29,6 @@ export async function requestUserPermission() {
 export async function getFcmToken() {
   const token = await messaging().getToken();
   if (token) {
-    console.log('FCM Token:', token);
     return token;
   }
 }

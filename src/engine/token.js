@@ -23,11 +23,7 @@ export const getToken = async (key) => {
   }
 };
 
-export const deleteToken = async (key) => {
-    try {
-        await Keychain.resetGenericPassword();
-    } catch (error) {
-        console.error('Error deleting token:', error);
-    }
-}
-    
+export const removeToken = async (key) => {
+  await Keychain.resetGenericPassword();
+};
+
