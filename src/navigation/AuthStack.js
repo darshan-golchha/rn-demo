@@ -11,7 +11,7 @@ export default function AuthStack({ setIsLoggedIn }) {
       <Stack.Screen name="Login" options={{ headerShown:false}}>
         {(props) => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
       </Stack.Screen>
-      <Stack.Screen name="Register">
+      <Stack.Screen name="Register" options={{ headerShown:false}}>
         {(props) => <RegisterScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
       </Stack.Screen>
     </Stack.Navigator>

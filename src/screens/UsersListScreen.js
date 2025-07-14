@@ -30,6 +30,7 @@ const UserListScreen = ({ navigation, setIsLoggedIn }) => {
   const [groupName, setGroupName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [optionsVisible, setOptionsVisible] = useState(false);
 
   const insets = useSafeAreaInsets(); // <-- Add this line
 
@@ -351,10 +352,6 @@ const UserListScreen = ({ navigation, setIsLoggedIn }) => {
     }
     await removeToken("token");
     setIsLoggedIn(false);
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'Login' }],
-    });
   };
 
   const formatTime = (dateString) => {
@@ -518,6 +515,44 @@ const UserListScreen = ({ navigation, setIsLoggedIn }) => {
     </View>
   );
 
+  // Enhanced header with three-dot dropdown for logout
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>Chats</Text>
+      <TouchableOpacity
+        style={styles.headerIcon}
+        onPress={() => setOptionsVisible(true)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.headerIconText}>⋮</Text>
+      </TouchableOpacity>
+      <Modal
+        visible={optionsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOptionsVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.optionsOverlay}
+          activeOpacity={1}
+          onPressOut={() => setOptionsVisible(false)}
+        >
+          <View style={styles.optionsDropdown}>
+            <TouchableOpacity
+              style={styles.optionsItem}
+              onPress={() => {
+                setOptionsVisible(false);
+                handleLogout();
+              }}
+            >
+              <Text style={styles.optionsText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+
   if (loading && !refreshing) {
     return (
       <SafeAreaView style={styles.container}>
@@ -541,14 +576,8 @@ const UserListScreen = ({ navigation, setIsLoggedIn }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor="white" barStyle="dark-content" />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Chats</Text>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
-
+      <StatusBar backgroundColor="#f2f6fc" barStyle="dark-content" />
+      {renderHeader()}
       <FlatList
         data={combinedData}
         keyExtractor={(item) => `${item.type}-${item.id}`}
@@ -569,12 +598,12 @@ const UserListScreen = ({ navigation, setIsLoggedIn }) => {
       <TouchableOpacity
         style={[
           styles.fab,
-          { bottom: 64 + insets.bottom } // <-- Use safe area inset for bottom
+          { bottom: 64 + insets.bottom }
         ]}
         onPress={() => setShowGroupModal(true)}
         activeOpacity={0.8}
       >
-        <Text style={styles.fabIcon}>➕</Text>
+        <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
 
       <Modal
@@ -641,54 +670,97 @@ const UserListScreen = ({ navigation, setIsLoggedIn }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#f2f6fc',
   },
   header: {
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 20,
+    backgroundColor: '#f2f6fc',
+    paddingHorizontal: 20,
     paddingTop: 40,
-    elevation: 4,
+    paddingBottom: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderBottomColor: '#E0E8E0',
+    borderBottomWidth: 1,
+    elevation: 2,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    color: 'black',
+    color: '#222',
+    letterSpacing: 0.5,
+  },
+  headerIcon: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  optionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+  },
+  optionsDropdown: {
+    marginTop: 60,
+    marginRight: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+    minWidth: 140,
+  },
+  optionsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  optionsText: {
+    fontSize: 16,
+    color: '#222',
+    fontWeight: '500',
   },
   itemContainer: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#fff',
+    marginHorizontal: 12,
+    marginVertical: 6,
+    borderRadius: 16,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E8E0',
+    paddingVertical: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 4,
+    elevation: 2,
   },
   lastItem: {
-    borderBottomWidth: 0,
+    marginBottom: 24,
   },
   itemContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1, // <-- Add this line
+    flex: 1,
   },
   itemDetails: {
-    flex: 1, // <-- Add this line
-    marginLeft: 12,
+    flex: 1,
+    marginLeft: 14,
     justifyContent: 'center',
-    minWidth: 0, // <-- Add this line to allow text truncation
+    minWidth: 0,
   },
   itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   itemName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#333',
+    color: '#222',
     flex: 1,
   },
   itemMeta: {
@@ -697,64 +769,50 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   timeText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#8696A0',
   },
   messageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 2,
   },
   lastMessage: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#666',
     flex: 1,
   },
   itemSubtext: {
     fontSize: 14,
-    color: '#666',
-  },
-  participantBadge: {
-    fontSize: 11,
-    color: '#25D366',
-    fontWeight: '600',
-    backgroundColor: '#E8F5E8',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 8,
+    color: '#888',
   },
   onlineDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#25D366',
+    marginLeft: 4,
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#808080',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#4F8EF7',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
   },
   groupAvatar: {
     backgroundColor: '#25D366',
   },
-  smallAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
   avatarText: {
     color: '#FFF',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  smallAvatarText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
   },
   fab: {
     position: 'absolute',
@@ -951,6 +1009,61 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '600',
     fontSize: 14,
+  },
+  headerIconText: {
+    fontSize: 24,
+    color: 'black',
+  },
+  smallAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  smallAvatarText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  modalCancelButton: {
+    paddingVertical: 8,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: '#FFF',
+    fontWeight: '500',
+  },
+  modalCreateButton: {
+    paddingVertical: 8,
+  },
+  modalCreateButtonDisabled: {
+    opacity: 0.5,
+  },
+  modalCreateText: {
+    fontSize: 16,
+    color: '#25D366',
+    fontWeight: '600',
+  },
+  modalCreateTextDisabled: {
+    color: '#8696A0',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#ECE5DD',
+  },
+  modalHeader: { 
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    paddingTop: 40,
+    backgroundColor: '#075E54',
+    borderBottomWidth: 0,
+  },
+  fabText: {
+    color: '#FFF',
+    fontSize: 32,
+    fontWeight: 'bold',
   },
 });
 

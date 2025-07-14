@@ -61,40 +61,90 @@ export default function RegisterScreen({ navigation, setIsLoggedIn }) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Register</Text>
-      <TextInput
-        placeholder="Email"
-        style={styles.input}
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
-      <TextInput
-        placeholder="Password"
-        style={styles.input}
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <Button title="Register" onPress={handleRegister} />
-      <Text style={styles.link} onPress={() => navigation.navigate('Login')}>
-        Already have an account? Login
-      </Text>
+    <View style={styles.outerContainer}>
+      <View style={styles.chatBubble}>
+        <Text style={styles.heading}>Create Account ✨</Text>
+        <Text style={styles.subHeading}>Sign up to start chatting</Text>
+        <TextInput
+          placeholder="Email"
+          style={styles.input}
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          placeholderTextColor="#888"
+        />
+        <TextInput
+          placeholder="Password"
+          style={styles.input}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          placeholderTextColor="#888"
+        />
+        <View style={styles.buttonContainer}>
+          <Button title="Register" color="#4F8EF7" onPress={handleRegister} />
+        </View>
+        <Text style={styles.link} onPress={() => navigation.navigate('Login')}>
+          Already have an account? <Text style={{color:'#4F8EF7'}}>Login</Text>
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 20 },
-  heading: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 10,
-    marginBottom: 15,
-    borderRadius: 5,
+  outerContainer: {
+    flex: 1,
+    backgroundColor: '#f2f6fc',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  link: { marginTop: 15, color: 'blue', textAlign: 'center' },
+  chatBubble: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
+    width: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    alignItems: 'center',
+  },
+  heading: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#222',
+    textAlign: 'center',
+  },
+  subHeading: {
+    fontSize: 15,
+    color: '#666',
+    marginBottom: 22,
+    textAlign: 'center',
+  },
+  input: {
+    width: '100%',
+    borderWidth: 0,
+    backgroundColor: '#f2f6fc',
+    padding: 12,
+    marginBottom: 15,
+    borderRadius: 15,
+    fontSize: 16,
+    color: '#222',
+  },
+  buttonContainer: {
+    width: '100%',
+    borderRadius: 15,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  link: {
+    marginTop: 10,
+    color: '#888',
+    textAlign: 'center',
+    fontSize: 15,
+  },
 });
