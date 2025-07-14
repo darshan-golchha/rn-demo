@@ -159,7 +159,6 @@ const MediaMessage = memo(({ item }) => {
 const MessageItem = memo(({ item, isGroup, currentUserId }) => {
   const isOwn = item.author === currentUserId;
   
-  // Memoize expensive calculations
   const formattedTime = useMemo(() => {
     if (!item.dateCreated) return '';
     const date = new Date(item.dateCreated);
@@ -173,36 +172,48 @@ const MessageItem = memo(({ item, isGroup, currentUserId }) => {
         isOwn ? styles.ownMessageContainer : styles.otherMessageContainer,
       ]}
     >
-      {isGroup && !isOwn && (
+      {!isOwn && isGroup && (
         <Text style={styles.senderName}>{item.author}</Text>
       )}
       
-      <View
-        style={[
-          styles.messageBubble,
-          isOwn ? styles.ownMessageBubble : styles.otherMessageBubble,
-        ]}
-      >
-        {item.type === 'media' && item.media ? (
-          <MediaMessage item={item} />
-        ) : (
-          <Text
-            style={[
-              styles.messageText,
-              isOwn ? styles.ownMessageText : styles.otherMessageText,
-            ]}
-          >
-            {item.body}
-          </Text>
+      <View style={styles.messageRow}>
+        {!isOwn && (
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {item.author?.charAt(0)?.toUpperCase() || '?'}
+              </Text>
+            </View>
+          </View>
         )}
-        <Text
+
+        <View
           style={[
-            styles.timestamp,
-            isOwn ? styles.ownTimestamp : styles.otherTimestamp,
+            styles.messageBubble,
+            isOwn ? styles.ownMessageBubble : styles.otherMessageBubble,
           ]}
         >
-          {formattedTime}
-        </Text>
+          {item.type === 'media' && item.media ? (
+            <MediaMessage item={item} />
+          ) : (
+            <Text
+              style={[
+                styles.messageText,
+                isOwn ? styles.ownMessageText : styles.otherMessageText,
+              ]}
+            >
+              {item.body}
+            </Text>
+          )}
+          <Text
+            style={[
+              styles.timestamp,
+              isOwn ? styles.ownTimestamp : styles.otherTimestamp,
+            ]}
+          >
+            {formattedTime}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -901,12 +912,154 @@ const ChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F2F6FC',
   },
   messagesContainer: {
     flex: 1,
+    backgroundColor: '#F2F6FC',
+  },
+  messagesList: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  messageContainer: {
+    marginVertical: 4,
+    paddingHorizontal: 8,
+  },
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  avatarContainer: {
+    width: 32,
+    marginRight: 8,
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  ownMessageContainer: {
+    alignItems: 'flex-end',
+  },
+  otherMessageContainer: {
+    alignItems: 'flex-start',
+  },
+  senderName: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginLeft: 40,
+    marginBottom: 2,
+    fontWeight: '500',
+  },
+  messageBubble: {
+    maxWidth: '75%',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    elevation: 1,
+  },
+  ownMessageBubble: {
+    backgroundColor: '#4F8EF7',
+    borderBottomRightRadius: 4,
+  },
+  otherMessageBubble: {
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 4,
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  ownMessageText: {
+    color: '#FFFFFF',
+  },
+  otherMessageText: {
+    color: '#111827',
+  },
+  timestamp: {
+    fontSize: 11,
+    marginTop: 4,
+    alignSelf: 'flex-end',
+  },
+  ownTimestamp: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  otherTimestamp: {
+    color: '#6B7280',
+  },
+  inputContainer: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  inputWrapperEnhanced: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 24,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  attachButtonEnhanced: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#4F8EF7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  attachIconEnhanced: {
+    fontSize: 20,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    marginTop: -2,
+  },
+  textInputEnhanced: {
+    flex: 1,
+    fontSize: 16,
+    color: '#111827',
+    maxHeight: 100,
+    minHeight: 32,
+    paddingHorizontal: 8,
+    paddingTop: Platform.OS === 'ios' ? 8 : 4,
+    paddingBottom: Platform.OS === 'ios' ? 8 : 4,
+  },
+  sendButtonEnhanced: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    backgroundColor: '#E5E7EB',
+  },
+  sendButtonActiveEnhanced: {
+    backgroundColor: '#4F8EF7',
+  },
+  sendIconEnhanced: {
+    fontSize: 18,
+    color: '#9CA3AF',
+  },
+  sendIconActiveEnhanced: {
+    color: '#FFFFFF',
   },
   headerTitle: {
+    flexDirection: 'column',
     alignItems: 'center',
   },
   headerTitleText: {
@@ -919,161 +1072,31 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
-  headerButton: {
-    padding: 8,
-  },
-  headerButtonText: {
-    fontSize: 18,
-    color: '#007AFF',
-  },
-  messagesList: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
-    flexGrow: 1,
-  },
-  messageContainer: {
-    flexDirection: 'column',
-    marginVertical: 4,
-    alignItems: 'flex-end',
-  },
-  ownMessageContainer: {
-    alignItems: 'flex-end',
-  },
-  otherMessageContainer: {
-    alignItems: 'flex-start',
-  },
-  senderName: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-    marginLeft: 16,
-    fontWeight: '500',
-  },
-  messageBubble: {
-    maxWidth: width * 0.72,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
-  },
-  ownMessageBubble: {
-    backgroundColor: '#111827',
-    borderBottomRightRadius: 6,
-  },
-  otherMessageBubble: {
+  mediaMessage: {
+    borderRadius: 12,
+    overflow: 'hidden',
     backgroundColor: '#F3F4F6',
-    borderBottomLeftRadius: 6,
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '400',
-  },
-  ownMessageText: {
-    color: '#FFFFFF',
-  },
-  otherMessageText: {
-    color: '#111827',
-  },
-  timestamp: {
-    fontSize: 11,
-    marginTop: 6,
-    alignSelf: 'flex-end',
-    fontWeight: '400',
-    letterSpacing: 0.3,
-  },
-  ownTimestamp: {
-    color: '#9CA3AF',
-  },
-  otherTimestamp: {
-    color: '#6B7280',
   },
   messageImage: {
-    width: 220,
-    height: 220,
-    borderRadius: 16,
-    marginBottom: 4,
+    width: 240,
+    height: 240,
+    borderRadius: 12,
   },
-  mediaPlaceholder: {
+  fileMessage: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-  },
-  mediaText: {
-    fontSize: 15,
-    color: '#6B7280',
-    flex: 1,
-    fontWeight: '400',
-  },
-  inputContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  inputWrapperEnhanced: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 28,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  attachButtonEnhanced: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#6B7280',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 6,
-  },
-  attachIconEnhanced: {
-    fontSize: 22,
-    color: '#fff',
-    fontWeight: 'bold',
-    marginTop: -2,
-  },
-  textInputEnhanced: {
-    flex: 1,
-    fontSize: 16,
-    color: '#111827',
-    fontWeight: '400',
-    lineHeight: 22,
-    minHeight: 36,
-    maxHeight: 100,
-    paddingHorizontal: 10,
-    backgroundColor: 'transparent',
-    paddingTop: Platform.OS === 'ios' ? 7 : 6,
-    paddingBottom: Platform.OS === 'ios' ? 7 : 6,
-  },
-  sendButtonEnhanced: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 6,
     backgroundColor: '#F3F4F6',
+    borderRadius: 12,
   },
-  sendButtonActiveEnhanced: {
-    backgroundColor: '#111827',
+  fileIcon: {
+    fontSize: 24,
+    marginRight: 8,
   },
-  sendIconEnhanced: {
-    fontSize: 20,
-    color: '#9CA3AF',
-    fontWeight: '600',
-  },
-  sendIconActiveEnhanced: {
-    color: '#FFFFFF',
+  fileName: {
+    fontSize: 14,
+    color: '#4F8EF7',
+    textDecorationLine: 'underline',
   },
 
   // Modal Styles
