@@ -8,7 +8,7 @@ const Stack = createNativeStackNavigator();
 export default function MainStack() {
   return (
     <Stack.Navigator initialRouteName="Users">
-      <Stack.Screen name="Users"options={{ headerShown: false }}>
+      <Stack.Screen name="Users" options={{ headerShown: false }}>
         {props => <UserListScreen {...props}  setIsLoggedIn={props.setIsLoggedIn} />}
       </Stack.Screen>
       <Stack.Screen name="Chat" component={ChatScreen} />
