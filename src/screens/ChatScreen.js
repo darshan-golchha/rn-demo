@@ -363,9 +363,44 @@ const ChatScreen = ({ route, navigation }) => {
     if (input.trim()) {
       setIsTyping(true);
       try {
+        const text_message = input;
         await conversation.sendMessage(input);
         await conversation.setAllMessagesRead();
         setInput('');
+
+        // Asynchronously notify other participants
+        (async () => {
+          try {
+            const token = await require('../engine/token').getToken("token");
+            let participantsToNotify;
+            if (isGroup) {
+              participantsToNotify = groupInfo.participants.filter(p => p !== client.user.identity);
+            } else {
+              // For one-to-one, notify only the other user
+              participantsToNotify = recipientUsername !== client.user.identity
+                ? [recipientUsername]
+                : [];
+            }
+            if (participantsToNotify.length > 0) {
+              // fetch('http://192.168.29.196:8080/api/auth/event', {
+              fetch('https://conv-backend.darshangolchha.com/api/auth/event', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  participants: participantsToNotify,
+                  senderUserName: groupInfo.name ? client.user.identity + " @ " + groupInfo.name : client.user.identity,
+                  message: text_message,
+                }),
+              });
+            }
+          } catch (err) {
+            console.warn('Failed to send event notification', err);
+          }
+        })();
+
       } catch (error) {
         console.error('Error sending message:', error);
         Alert.alert('Error', 'Failed to send message');

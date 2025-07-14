@@ -340,6 +340,7 @@ const UserListScreen = ({ navigation, setIsLoggedIn }) => {
   const handleLogout = async () => {
     try {
       await fetch('https://conv-backend.darshangolchha.com/api/auth/logout', {
+      // await fetch('http://192.168.29.196:8080/api/auth/logout', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${await getToken("token")}`,
