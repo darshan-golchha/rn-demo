@@ -292,8 +292,8 @@ const UserListScreen = ({ navigation, setIsLoggedIn }) => {
       return;
     }
 
-    if (selectedUsers.length < 2) {
-      Alert.alert('Error', 'Select at least 2 members');
+    if (selectedUsers.length < 1) {
+      Alert.alert('Error', 'Select at least 1 members');
       return;
     }
 
@@ -318,18 +318,16 @@ const UserListScreen = ({ navigation, setIsLoggedIn }) => {
       }
       await conversation.add(client.user.identity);
 
-      setShowGroupModal(false);
-      setGroupName('');
-      setSelectedUsers([]);
-
-      await fetchConversations();
-
       navigation.navigate('Chat', {
         conversationSid: conversation.sid,
         groupName: groupName,
         isGroup: true,
         participants: [...selectedUsers, client.user.identity],
       });
+
+      setShowGroupModal(false);
+      setGroupName('');
+      setSelectedUsers([]);
     } catch (err) {
       console.error('Error creating group:', err);
       Alert.alert('Error', 'Failed to create group');
@@ -627,15 +625,15 @@ const UserListScreen = ({ navigation, setIsLoggedIn }) => {
             <TouchableOpacity
               onPress={createGroup}
               style={[styles.modalCreateButton,
-                (!groupName.trim() || selectedUsers.length < 2) && styles.modalCreateButtonDisabled
+                (!groupName.trim() || selectedUsers.length < 1) && styles.modalCreateButtonDisabled
               ]}
-              disabled={!groupName.trim() || selectedUsers.length < 2 || creatingGroup}
+              disabled={!groupName.trim() || selectedUsers.length < 1 || creatingGroup}
             >
               {creatingGroup ? (
                 <ActivityIndicator size="small" color="#25D366" />
               ) : (
                 <Text style={[styles.modalCreateText,
-                  (!groupName.trim() || selectedUsers.length < 2) && styles.modalCreateTextDisabled
+                  (!groupName.trim() || selectedUsers.length < 1) && styles.modalCreateTextDisabled
                 ]}>Create</Text>
               )}
             </TouchableOpacity>

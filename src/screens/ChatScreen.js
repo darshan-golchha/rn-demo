@@ -17,6 +17,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Linking,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { getTwilioClient } from '../engine/twclient';
 import { launchImageLibrary } from 'react-native-image-picker';
@@ -25,8 +27,59 @@ import ActionSheet from 'react-native-action-sheet';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RNFS from 'react-native-fs';
+import ImageViewing from 'react-native-image-viewing';
 
 const { width } = Dimensions.get('window');
+
+// 1. Add this utility function at the top of your file (after imports)
+const formatMessageDate = (dateString) => {
+  if (!dateString) return '';
+
+  const messageDate = new Date(dateString);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  // Reset time for accurate date comparison
+  const messageDateOnly = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate());
+  const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const yesterdayOnly = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+
+  if (messageDateOnly.getTime() === todayOnly.getTime()) {
+    return 'Today';
+  } else if (messageDateOnly.getTime() === yesterdayOnly.getTime()) {
+    return 'Yesterday';
+  } else {
+    // Format as "December 15, 2024" or similar
+    return messageDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  }
+};
+
+const shouldShowDateSeparator = (currentMessage, previousMessage) => {
+  if (!currentMessage.dateCreated) return false;
+  if (!previousMessage || !previousMessage.dateCreated) return true;
+
+  const currentDate = new Date(currentMessage.dateCreated);
+  const previousDate = new Date(previousMessage.dateCreated);
+
+  // Check if dates are different (ignoring time)
+  return currentDate.toDateString() !== previousDate.toDateString();
+};
+
+// 2. Add this new DateSeparator component
+const DateSeparator = memo(({ date }) => (
+  <View style={styles.dateSeparatorContainer}>
+    <View style={styles.dateSeparatorLine} />
+    <View style={styles.dateSeparatorTextContainer}>
+      <Text style={styles.dateSeparatorText}>{formatMessageDate(date)}</Text>
+    </View>
+    <View style={styles.dateSeparatorLine} />
+  </View>
+));
 
 // Media URL cache to prevent repeated API calls
 class MediaCache {
@@ -51,7 +104,7 @@ class MediaCache {
 }
 
 // Memoized Media Message Component
-const MediaMessage = memo(({ item }) => {
+const MediaMessage = memo(({ item, style, setIsImageViewVisible, setImageToPreview }) => {
   const [mediaUrl, setMediaUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -112,11 +165,18 @@ const MediaMessage = memo(({ item }) => {
 
   if (item.media?.contentType?.startsWith('image/')) {
     return (
-      <Image
-        source={{ uri: mediaUrl }}
-        style={styles.messageImage}
-        resizeMode="cover"
-      />
+      <TouchableOpacity
+        onPress={() => {
+          setImageToPreview({ uri: mediaUrl });
+          setIsImageViewVisible(true);
+        }}
+      >
+        <Image
+          source={{ uri: mediaUrl }}
+          style={styles.messageImage}
+          resizeMode="cover"
+        />
+      </TouchableOpacity>
     );
   }
 
@@ -157,7 +217,7 @@ const MediaMessage = memo(({ item }) => {
 });
 
 // Memoized Message Item Component
-const MessageItem = memo(({ item, isGroup, currentUserId }) => {
+const MessageItem = memo(({ item, isGroup, currentUserId, setIsImageViewVisible, setImageToPreview }) => {
   const isOwn = item.author === currentUserId;
 
   const formattedTime = useMemo(() => {
@@ -195,7 +255,7 @@ const MessageItem = memo(({ item, isGroup, currentUserId }) => {
           ]}
         >
           {item.type === 'media' && item.media ? (
-            <MediaMessage item={item} />
+            <MediaMessage item={item} style={styles.mediaMessageObject} setIsImageViewVisible={setIsImageViewVisible} setImageToPreview={setImageToPreview} />
           ) : (
             <Text
               style={[
@@ -245,6 +305,8 @@ const ChatScreen = ({ route, navigation }) => {
   const [availableUsers, setAvailableUsers] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isImageViewVisible, setIsImageViewVisible] = useState(false);
+  const [imageToPreview, setImageToPreview] = useState(null);
 
   const flatListRef = useRef(null);
   const client = getTwilioClient();
@@ -260,7 +322,16 @@ const ChatScreen = ({ route, navigation }) => {
         const conv = await client.getConversationBySid(conversationSid);
         setConversation(conv);
         const paginator = await conv.getMessages();
+
+        // Set messages and then scroll after a short delay
         setMessages(paginator.items);
+
+        // Use requestAnimationFrame to ensure the FlatList has rendered
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }, 100);
+        });
 
         if (isGroup) {
           const participants = await conv.getParticipants();
@@ -272,10 +343,14 @@ const ChatScreen = ({ route, navigation }) => {
         }
 
         conv.on('messageAdded', (msg) => {
-          setMessages(prevMessages => [...prevMessages, msg]);
-          setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
-          }, 100);
+          setMessages(prevMessages => {
+            const newMessages = [...prevMessages, msg];
+            // Scroll to end after state update
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 50);
+            return newMessages;
+          });
         });
 
         if (isGroup) {
@@ -310,8 +385,23 @@ const ChatScreen = ({ route, navigation }) => {
     setup();
   }, [conversationSid, isGroup]);
 
+
   useEffect(() => {
     navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => {
+            // Navigate back and trigger refresh
+            navigation.navigate('Users', {
+              refresh: true,
+              timestamp: Date.now()
+            });
+          }}
+          style={{ marginLeft: 16 }}
+        >
+          <Text style={{ fontSize: 16, color: '#007AFF' }}>Back</Text>
+        </TouchableOpacity>
+      ),
       headerTitle: () => (
         <TouchableOpacity
           onPress={isGroup ? () => setShowGroupInfo(true) : undefined}
@@ -405,6 +495,7 @@ const ChatScreen = ({ route, navigation }) => {
                   participants: participantsToNotify,
                   senderUserName: groupInfo.name ? client.user.identity + " @ " + groupInfo.name : client.user.identity,
                   message: text_message,
+                  conversationSid: conversationSid,
                 }),
               });
             }
@@ -593,7 +684,10 @@ const ChatScreen = ({ route, navigation }) => {
           onPress: async () => {
             try {
               await conversation.leave();
-              navigation.goBack();
+              navigation.navigate('Users', {
+                refresh: true,
+                timestamp: Date.now()
+              });
             } catch (error) {
               console.error('Error leaving group:', error);
               Alert.alert('Error', 'Failed to leave group');
@@ -613,13 +707,23 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   // Memoized callbacks for FlatList optimization
-  const renderMessage = useCallback(({ item }) => (
-    <MessageItem
-      item={item}
-      isGroup={isGroup}
-      currentUserId={currentUserId}
-    />
-  ), [isGroup, currentUserId]);
+  const renderMessage = useCallback(({ item, index }) => {
+    const previousMessage = index > 0 ? messages[index - 1] : null;
+    const showDateSeparator = shouldShowDateSeparator(item, previousMessage);
+
+    return (
+      <>
+        {showDateSeparator && <DateSeparator date={item.dateCreated} />}
+        <MessageItem
+          item={item}
+          isGroup={isGroup}
+          currentUserId={currentUserId}
+          setIsImageViewVisible={setIsImageViewVisible}
+          setImageToPreview={setImageToPreview}
+        />
+      </>
+    );
+  }, [isGroup, currentUserId, messages]);
 
   const keyExtractor = useCallback((item) => item.sid, []);
 
@@ -682,73 +786,77 @@ const ChatScreen = ({ route, navigation }) => {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
-          style={{ flex: 1, marginBottom: insets.bottom || 8 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight + insets.top + 32 : 32}
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 64 : 0}
         >
-          <View style={styles.messagesContainer}>
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              keyExtractor={keyExtractor}
-              renderItem={renderMessage}
-              contentContainerStyle={styles.messagesList}
-              showsVerticalScrollIndicator={false}
-              removeClippedSubviews={true}
-              maxToRenderPerBatch={10}
-              windowSize={10}
-              initialNumToRender={20}
-              updateCellsBatchingPeriod={100}
-              onContentSizeChange={() =>
-                flatListRef.current?.scrollToEnd({ animated: false })
-              }
-              maintainVisibleContentPosition={{
-                minIndexForVisible: 0,
-                autoscrollToTopThreshold: 10,
-              }}
-            />
-          </View>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={{ flex: 1 }}>
+              <View style={styles.messagesContainer}>
+                <FlatList
+                  ref={flatListRef}
+                  data={messages}
+                  keyExtractor={keyExtractor}
+                  renderItem={renderMessage}
+                  contentContainerStyle={styles.messagesList}
+                  showsVerticalScrollIndicator={false}
+                  removeClippedSubviews={true}
+                  maxToRenderPerBatch={10}
+                  windowSize={10}
+                  initialNumToRender={20}
+                  updateCellsBatchingPeriod={100}
+                  onContentSizeChange={() => {
+                    if (messages.length > 0) {
+                      setTimeout(() => {
+                        flatListRef.current?.scrollToEnd({ animated: false });
+                      }, 100);
+                    }
+                  }}
+                />
+              </View>
 
-          <View style={[styles.inputContainer, { paddingBottom: insets.bottom || 8 }]}>
-            <View style={styles.inputWrapperEnhanced}>
-              <TouchableOpacity
-                style={styles.attachButtonEnhanced}
-                onPress={onAttachPress}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.attachIconEnhanced}>+</Text>
-              </TouchableOpacity>
+              <View style={[styles.inputContainer, { paddingBottom: insets.bottom || 8 }]}>
+                <View style={styles.inputWrapperEnhanced}>
+                  <TouchableOpacity
+                    style={styles.attachButtonEnhanced}
+                    onPress={onAttachPress}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.attachIconEnhanced}>+</Text>
+                  </TouchableOpacity>
 
-              <TextInput
-                value={input}
-                onChangeText={setInput}
-                placeholder="Message"
-                placeholderTextColor="#9CA3AF"
-                style={styles.textInputEnhanced}
-                multiline
-                maxLength={1000}
-              />
+                  <TextInput
+                    value={input}
+                    onChangeText={setInput}
+                    placeholder="Message"
+                    placeholderTextColor="#9CA3AF"
+                    style={styles.textInputEnhanced}
+                    multiline
+                    maxLength={1000}
+                  />
 
-              <TouchableOpacity
-                style={[
-                  styles.sendButtonEnhanced,
-                  input.trim() ? styles.sendButtonActiveEnhanced : {},
-                ]}
-                onPress={sendTextMessage}
-                disabled={!input.trim() || isTyping}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.sendIconEnhanced,
-                    input.trim() ? styles.sendIconActiveEnhanced : {},
-                  ]}
-                >
-                  {isTyping ? '⋯' : '→'}
-                </Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.sendButtonEnhanced,
+                      input.trim() ? styles.sendButtonActiveEnhanced : {},
+                    ]}
+                    onPress={sendTextMessage}
+                    disabled={!input.trim() || isTyping}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.sendIconEnhanced,
+                        input.trim() ? styles.sendIconActiveEnhanced : {},
+                      ]}
+                    >
+                      {isTyping ? '⋯' : '→'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
+          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
 
         <Modal
@@ -925,6 +1033,15 @@ const ChatScreen = ({ route, navigation }) => {
             </View>
           </SafeAreaView>
         </Modal>
+        {imageToPreview && (
+          <ImageViewing
+            images={[imageToPreview]}
+            imageIndex={0}
+            visible={isImageViewVisible}
+            onRequestClose={() => setIsImageViewVisible(false)}
+            backgroundColor="#000"
+          />
+        )}
       </SafeAreaView>
     </>
   );
@@ -1099,9 +1216,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   messageImage: {
-    width: 240,
-    height: 240,
+    // width as 3/4 of container width, maintaining aspect ratio  
+    width: 175,
+    height: 200,
+    resizeMode: 'cover',
     borderRadius: 12,
+
   },
   fileMessage: {
     flexDirection: 'row',
@@ -1379,6 +1499,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#DC2626',
     fontWeight: '600',
+  },
+  dateSeparatorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    paddingHorizontal: 20,
+  },
+  dateSeparatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  dateSeparatorTextContainer: {
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'black',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+  },
+  dateSeparatorText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });
 
