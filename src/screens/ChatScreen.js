@@ -20,21 +20,22 @@ import {
 } from 'react-native';
 import { getTwilioClient } from '../engine/twclient';
 import { launchImageLibrary } from 'react-native-image-picker';
-import DocumentPicker from '@react-native-documents/picker';
+import { pick, types, keepLocalCopy } from '@react-native-documents/picker';
 import ActionSheet from 'react-native-action-sheet';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import RNFS from 'react-native-fs';
 
 const { width } = Dimensions.get('window');
 
 // Media URL cache to prevent repeated API calls
 class MediaCache {
   static cache = new Map();
-  
+
   static get(key) {
     return this.cache.get(key);
   }
-  
+
   static set(key, value) {
     // Limit cache size to prevent memory issues
     if (this.cache.size > 100) {
@@ -43,7 +44,7 @@ class MediaCache {
     }
     this.cache.set(key, value);
   }
-  
+
   static clear() {
     this.cache.clear();
   }
@@ -57,7 +58,7 @@ const MediaMessage = memo(({ item }) => {
 
   useEffect(() => {
     let isMounted = true;
-    
+
     // Check if URL is already cached
     const cachedUrl = MediaCache.get(item.sid);
     if (cachedUrl) {
@@ -71,10 +72,10 @@ const MediaMessage = memo(({ item }) => {
         if (item.type === 'media') {
           const media = await item.media;
           const url = await media.getContentTemporaryUrl();
-          
+
           // Cache the URL
           MediaCache.set(item.sid, url);
-          
+
           if (isMounted) {
             setMediaUrl(url);
             setLoading(false);
@@ -158,7 +159,7 @@ const MediaMessage = memo(({ item }) => {
 // Memoized Message Item Component
 const MessageItem = memo(({ item, isGroup, currentUserId }) => {
   const isOwn = item.author === currentUserId;
-  
+
   const formattedTime = useMemo(() => {
     if (!item.dateCreated) return '';
     const date = new Date(item.dateCreated);
@@ -175,7 +176,7 @@ const MessageItem = memo(({ item, isGroup, currentUserId }) => {
       {!isOwn && isGroup && (
         <Text style={styles.senderName}>{item.author}</Text>
       )}
-      
+
       <View style={styles.messageRow}>
         {!isOwn && (
           <View style={styles.avatarContainer}>
@@ -220,15 +221,15 @@ const MessageItem = memo(({ item, isGroup, currentUserId }) => {
 });
 
 const ChatScreen = ({ route, navigation }) => {
-  const { 
-    conversationSid, 
-    recipientUsername, 
+  const {
+    conversationSid,
+    recipientUsername,
     recipientAvatar,
     isGroup,
     groupName,
     participants
   } = route.params;
-  
+
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]); // Use stable state instead of ref
   const [input, setInput] = useState('');
@@ -312,7 +313,7 @@ const ChatScreen = ({ route, navigation }) => {
   useEffect(() => {
     navigation.setOptions({
       headerTitle: () => (
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={isGroup ? () => setShowGroupInfo(true) : undefined}
           style={styles.headerTitle}
           activeOpacity={isGroup ? 0.7 : 1}
@@ -350,7 +351,7 @@ const ChatScreen = ({ route, navigation }) => {
     try {
       const token = await require('../engine/token').getToken("token");
       const response = await fetch('https://conv-backend.darshangolchha.com/api/users/all', {
-      // const response = await fetch('http://192.168.29.196:8080/api/users/all', {
+        // const response = await fetch('http://192.168.29.196:8080/api/users/all', {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -360,7 +361,7 @@ const ChatScreen = ({ route, navigation }) => {
       if (response.ok) {
         const data = await response.json();
         const usersArray = Array.isArray(data) ? data : data.users || [];
-        const filteredUsers = usersArray.filter(user => 
+        const filteredUsers = usersArray.filter(user =>
           !groupInfo.participants.includes(user.userName)
         );
         setAvailableUsers(filteredUsers);
@@ -457,24 +458,44 @@ const ChatScreen = ({ route, navigation }) => {
 
   const sendFileMessage = async () => {
     try {
-      const res = await DocumentPicker.pickSingle({
-        type: [DocumentPicker.types.allFiles],
+      const [res] = await pick({
+        type: [types.allFiles],
       });
+
       if (!res) return;
-      const { uri, name, type } = res;
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      await conversation.sendMessage({
-        contentType: type,
-        filename: name,
-        media: blob,
+
+      const [localCopy] = await keepLocalCopy({
+        files: [
+          {
+            uri: res.uri,
+            fileName: res.name ?? 'fallbackName',
+          },
+        ],
+        destination: 'documentDirectory',
       });
+      const fileUri = localCopy.localUri;
+      if (!fileUri) throw new Error('Local file URI not found');
+
+      // ✅ Convert local file to blob using fetch
+      const response = await fetch(fileUri);
+      const fileBlob = await response.blob();
+
+      // ✅ Send via Twilio MessageBuilder
+      await conversation
+        .prepareMessage()
+        .addMedia({
+          media: fileBlob,
+          filename: res.name,
+          contentType: res.type,
+        })
+        .build()
+        .send();
+
       Alert.alert('Success', 'File sent');
     } catch (err) {
-      if (DocumentPicker.isCancel(err)) {
-      } else {
-        Alert.alert('Error', 'Failed to send file');
-      }
+      if (err?.message?.includes('User cancelled')) return;
+      console.error('Error sending file:', err);
+      Alert.alert('Error', 'Failed to send file');
     }
   };
 
@@ -584,8 +605,8 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   const toggleUserSelection = (userName) => {
-    setSelectedUsers(prev => 
-      prev.includes(userName) 
+    setSelectedUsers(prev =>
+      prev.includes(userName)
         ? prev.filter(u => u !== userName)
         : [...prev, userName]
     );
@@ -593,9 +614,9 @@ const ChatScreen = ({ route, navigation }) => {
 
   // Memoized callbacks for FlatList optimization
   const renderMessage = useCallback(({ item }) => (
-    <MessageItem 
-      item={item} 
-      isGroup={isGroup} 
+    <MessageItem
+      item={item}
+      isGroup={isGroup}
       currentUserId={currentUserId}
     />
   ), [isGroup, currentUserId]);
@@ -604,7 +625,7 @@ const ChatScreen = ({ route, navigation }) => {
 
   const renderGroupInfoParticipant = useCallback(({ item }) => {
     const isCurrentUser = item === currentUserId;
-    
+
     return (
       <View style={styles.participantItem}>
         <View style={styles.participantInfo}>
@@ -631,7 +652,7 @@ const ChatScreen = ({ route, navigation }) => {
 
   const renderAvailableUser = useCallback(({ item }) => {
     const isSelected = selectedUsers.includes(item.userName);
-    
+
     return (
       <TouchableOpacity
         onPress={() => toggleUserSelection(item.userName)}
@@ -828,8 +849,8 @@ const ChatScreen = ({ route, navigation }) => {
               <Text style={styles.modalTitle}>Add Participants</Text>
               <TouchableOpacity
                 onPress={addParticipants}
-                style={[styles.modalActionButton, 
-                  selectedUsers.length === 0 && styles.modalActionButtonDisabled
+                style={[styles.modalActionButton,
+                selectedUsers.length === 0 && styles.modalActionButtonDisabled
                 ]}
                 disabled={selectedUsers.length === 0 || loading}
               >
@@ -837,7 +858,7 @@ const ChatScreen = ({ route, navigation }) => {
                   <ActivityIndicator size="small" color="#007AFF" />
                 ) : (
                   <Text style={[styles.modalActionText,
-                    selectedUsers.length === 0 && styles.modalActionTextDisabled
+                  selectedUsers.length === 0 && styles.modalActionTextDisabled
                   ]}>Add</Text>
                 )}
               </TouchableOpacity>
@@ -877,8 +898,8 @@ const ChatScreen = ({ route, navigation }) => {
               <Text style={styles.modalTitle}>Edit Group Name</Text>
               <TouchableOpacity
                 onPress={updateGroupName}
-                style={[styles.modalActionButton, 
-                  !newGroupName.trim() && styles.modalActionButtonDisabled
+                style={[styles.modalActionButton,
+                !newGroupName.trim() && styles.modalActionButtonDisabled
                 ]}
                 disabled={!newGroupName.trim() || loading}
               >
@@ -886,7 +907,7 @@ const ChatScreen = ({ route, navigation }) => {
                   <ActivityIndicator size="small" color="#007AFF" />
                 ) : (
                   <Text style={[styles.modalActionText,
-                    !newGroupName.trim() && styles.modalActionTextDisabled
+                  !newGroupName.trim() && styles.modalActionTextDisabled
                   ]}>Save</Text>
                 )}
               </TouchableOpacity>
