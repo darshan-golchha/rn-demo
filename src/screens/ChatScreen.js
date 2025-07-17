@@ -19,6 +19,7 @@ import {
   Linking,
   TouchableWithoutFeedback,
   Keyboard,
+  InteractionManager,
 } from 'react-native';
 import { getTwilioClient } from '../engine/twclient';
 import { launchImageLibrary } from 'react-native-image-picker';
@@ -459,7 +460,7 @@ const ChatScreen = ({ route, navigation }) => {
     try {
       const token = await require('../engine/token').getToken("token");
       const response = await fetch('https://conv-backend.darshangolchha.com/api/users/all', {
-      // const response = await fetch('http://192.168.29.196:8080/api/users/all', {
+        // const response = await fetch('http://192.168.29.196:8080/api/users/all', {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -503,7 +504,7 @@ const ChatScreen = ({ route, navigation }) => {
             }
             if (participantsToNotify.length > 0) {
               // fetch('http://192.168.29.196:8080/api/auth/event', {
-                fetch('https://conv-backend.darshangolchha.com/api/auth/event', {
+              fetch('https://conv-backend.darshangolchha.com/api/auth/event', {
                 method: 'POST',
                 headers: {
                   Authorization: `Bearer ${token}`,
@@ -813,70 +814,75 @@ const ChatScreen = ({ route, navigation }) => {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight + insets.top : 0}
         >
-            <View style={styles.messagesContainer}>
-              <FlatList
-                ref={flatListRef}
-                data={messages}
-                keyExtractor={keyExtractor}
-                renderItem={renderMessage}
-                contentContainerStyle={styles.messagesList}
-                showsVerticalScrollIndicator={false}
-                removeClippedSubviews={true}
-                maxToRenderPerBatch={10}
-                windowSize={10}
-                initialNumToRender={20}
-                updateCellsBatchingPeriod={100}
-                onContentSizeChange={() =>
-                  flatListRef.current?.scrollToEnd({ animated: false })
-                }
-                maintainVisibleContentPosition={{
-                  minIndexForVisible: 0,
-                  autoscrollToTopThreshold: 10,
-                }}
-              />
+          <View style={styles.messagesContainer}>
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={keyExtractor}
+              renderItem={renderMessage}
+              contentContainerStyle={styles.messagesList}
+              showsVerticalScrollIndicator={false}
+              removeClippedSubviews={false}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              initialNumToRender={20}
+              updateCellsBatchingPeriod={100}
+              onContentSizeChange={() => {
+                InteractionManager.runAfterInteractions(() => {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: false });
+                  }, 50);
+                });
+              }}
+              maintainVisibleContentPosition={{
+                minIndexForVisible: 0,
+                autoscrollToTopThreshold: 10,
+              }}
+            />
 
-              {/* Input Area */}
-              <View style={[styles.inputContainer, { paddingBottom: keyboardHeight ? insets.bottom + 48 : insets.bottom }]}>
-                <View style={styles.inputWrapperEnhanced}>
-                  <TouchableOpacity
-                    style={styles.attachButtonEnhanced}
-                    onPress={onAttachPress}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.attachIconEnhanced}>+</Text>
-                  </TouchableOpacity>
 
-                  <TextInput
-                    value={input}
-                    onChangeText={setInput}
-                    placeholder="Message"
-                    placeholderTextColor="#9CA3AF"
-                    style={styles.textInputEnhanced}
-                    multiline
-                    maxLength={1000}
-                  />
+            {/* Input Area */}
+            <View style={[styles.inputContainer, { paddingBottom: keyboardHeight ? insets.bottom + 48 : insets.bottom }]}>
+              <View style={styles.inputWrapperEnhanced}>
+                <TouchableOpacity
+                  style={styles.attachButtonEnhanced}
+                  onPress={onAttachPress}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.attachIconEnhanced}>+</Text>
+                </TouchableOpacity>
 
-                  <TouchableOpacity
+                <TextInput
+                  value={input}
+                  onChangeText={setInput}
+                  placeholder="Message"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.textInputEnhanced}
+                  multiline
+                  maxLength={1000}
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.sendButtonEnhanced,
+                    input.trim() ? styles.sendButtonActiveEnhanced : {},
+                  ]}
+                  onPress={sendTextMessage}
+                  disabled={!input.trim() || isTyping}
+                  activeOpacity={0.8}
+                >
+                  <Text
                     style={[
-                      styles.sendButtonEnhanced,
-                      input.trim() ? styles.sendButtonActiveEnhanced : {},
+                      styles.sendIconEnhanced,
+                      input.trim() ? styles.sendIconActiveEnhanced : {},
                     ]}
-                    onPress={sendTextMessage}
-                    disabled={!input.trim() || isTyping}
-                    activeOpacity={0.8}
                   >
-                    <Text
-                      style={[
-                        styles.sendIconEnhanced,
-                        input.trim() ? styles.sendIconActiveEnhanced : {},
-                      ]}
-                    >
-                      {isTyping ? '⋯' : '→'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                    {isTyping ? '⋯' : '→'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
+          </View>
         </KeyboardAvoidingView>
 
         <Modal
