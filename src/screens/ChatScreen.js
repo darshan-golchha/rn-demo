@@ -313,6 +313,24 @@ const ChatScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
 
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+
   // Memoize current user identity
   const currentUserId = useMemo(() => client.user.identity, [client.user.identity]);
 
@@ -440,8 +458,8 @@ const ChatScreen = ({ route, navigation }) => {
   const fetchAvailableUsers = async () => {
     try {
       const token = await require('../engine/token').getToken("token");
-      const response = await fetch('https://conv-backend.darshangolchha.com/api/users/all', {
-        // const response = await fetch('http://192.168.29.196:8080/api/users/all', {
+      // const response = await fetch('https://conv-backend.darshangolchha.com/api/users/all', {
+      const response = await fetch('http://192.168.29.196:8080/api/users/all', {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -484,18 +502,23 @@ const ChatScreen = ({ route, navigation }) => {
                 : [];
             }
             if (participantsToNotify.length > 0) {
-              // fetch('http://192.168.29.196:8080/api/auth/event', {
-              fetch('https://conv-backend.darshangolchha.com/api/auth/event', {
+              fetch('http://192.168.29.196:8080/api/auth/event', {
+                // fetch('https://conv-backend.darshangolchha.com/api/auth/event', {
                 method: 'POST',
                 headers: {
                   Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                  participants: participantsToNotify,
+                  participantsToNotify: participantsToNotify,
                   senderUserName: groupInfo.name ? client.user.identity + " @ " + groupInfo.name : client.user.identity,
                   message: text_message,
                   conversationSid: conversationSid,
+                  isGroup: isGroup,
+                  recipientUsername: isGroup ? '' : recipientUsername,
+                  groupName: isGroup ? groupName : '',
+                  recipientAvatar: recipientAvatar || '',
+                  participants: isGroup ? groupInfo.participants : [],
                 }),
               });
             }
@@ -786,38 +809,34 @@ const ChatScreen = ({ route, navigation }) => {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
-          style={{ flex: 1 , backgroundColor: '#FFFFFF'}}
+          style={{ flex: 1, backgroundColor: '#FFFFFF' }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={
-            Platform.OS === 'ios' ? headerHeight + insets.top : 48
-          }
+          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight + insets.top : 0}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={{ flex: 1 }}>
-              <View style={styles.messagesContainer}>
-                <FlatList
-                  ref={flatListRef}
-                  data={messages}
-                  keyExtractor={keyExtractor}
-                  renderItem={renderMessage}
-                  contentContainerStyle={styles.messagesList}
-                  showsVerticalScrollIndicator={false}
-                  removeClippedSubviews={true}
-                  maxToRenderPerBatch={10}
-                  windowSize={10}
-                  initialNumToRender={20}
-                  updateCellsBatchingPeriod={100}
-                  onContentSizeChange={() => {
-                    if (messages.length > 0) {
-                      setTimeout(() => {
-                        flatListRef.current?.scrollToEnd({ animated: false });
-                      }, 100);
-                    }
-                  }}
-                />
-              </View>
+            <View style={styles.messagesContainer}>
+              <FlatList
+                ref={flatListRef}
+                data={messages}
+                keyExtractor={keyExtractor}
+                renderItem={renderMessage}
+                contentContainerStyle={styles.messagesList}
+                showsVerticalScrollIndicator={false}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={10}
+                windowSize={10}
+                initialNumToRender={20}
+                updateCellsBatchingPeriod={100}
+                onContentSizeChange={() =>
+                  flatListRef.current?.scrollToEnd({ animated: false })
+                }
+                maintainVisibleContentPosition={{
+                  minIndexForVisible: 0,
+                  autoscrollToTopThreshold: 10,
+                }}
+              />
 
-              <View style={[styles.inputContainer, { paddingBottom: insets.bottom || 8 }]}>
+              {/* Input Area */}
+              <View style={[styles.inputContainer, { paddingBottom: keyboardHeight ? insets.bottom + 48 : insets.bottom }]}>
                 <View style={styles.inputWrapperEnhanced}>
                   <TouchableOpacity
                     style={styles.attachButtonEnhanced}
@@ -858,7 +877,6 @@ const ChatScreen = ({ route, navigation }) => {
                 </View>
               </View>
             </View>
-          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
 
         <Modal

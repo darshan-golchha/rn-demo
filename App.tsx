@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import AppNavigator from './src/navigation/AppNavigator';
 import messaging from '@react-native-firebase/messaging';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 import notifee, { AndroidImportance } from '@notifee/react-native';
 import { initTwilioClient } from './src/engine/twclient';
 
@@ -33,7 +33,11 @@ export async function getFcmToken() {
   }
 }
 
+// Navigation reference for handling navigation outside component tree
+import { navigationRef, navigate, isReadyRef } from './src/navigation/navigationRef';
+
 export default function App() {
+
   useEffect(() => {
     async function setupNotifications() {
       const permissionGranted = await requestUserPermission();
@@ -57,22 +61,102 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = messaging().onMessage(async remoteMessage => {
+      console.log('Notification caused app to open from foreground state:', remoteMessage);
       await notifee.displayNotification({
         title: remoteMessage.notification?.title,
         body: remoteMessage.notification?.body,
         android: {
           channelId: 'default',
           importance: AndroidImportance.HIGH,
+          pressAction: {
+            id: 'default',
+          },
         },
       });
     });
 
-    return unsubscribe;
+    // Handle tap when app is in background
+    const unsubOpen = messaging().onNotificationOpenedApp(remoteMessage => {
+      console.log('Notification caused app to open from background state:', remoteMessage);
+      if (remoteMessage?.data) {
+        navigateToChat(remoteMessage.data);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      unsubOpen();
+    };
   }, []);
 
+  interface NotificationData {
+  conversationSid: string;
+  isGroup?: string | boolean;
+  groupName?: string;
+  participants?: string;
+  recipientUsername?: string;
+  recipientAvatar?: string;
+}
+
+let initialNotificationData: NotificationData | null = null;
+
+useEffect(() => {
+  messaging().getInitialNotification().then(remoteMessage => {
+    const data = remoteMessage?.data;
+    if (data && typeof data.conversationSid === 'string') {
+      // safe to cast now
+      initialNotificationData = remoteMessage?.data as any as NotificationData;
+    } else {
+      console.warn('Initial notification missing conversationSid:', data);
+    }
+  });
+
+  const interval = setInterval(() => {
+    if (initialNotificationData && isReadyRef.current) {
+      console.log('Navigating after app ready:', initialNotificationData);
+      navigateToChat(initialNotificationData);
+      initialNotificationData = null;
+      clearInterval(interval);
+    }
+  }, 500);
+
+  return () => clearInterval(interval);
+}, []);
+
+
+
+  const navigateToChat = (data: any) => {
+    console.log('Navigating to chat with data:', data);
+    const isGroup = data.isGroup === 'true' || data.isGroup === true;
+
+    if (!data.conversationSid) return;
+
+    if (isGroup) {
+      navigate('Chat', {
+        conversationSid: data.conversationSid,
+        groupName: data.groupName || '',
+        isGroup: true,
+        participants: JSON.parse(data.participants || '[]'),
+      });
+    } else {
+      navigate('Chat', {
+        conversationSid: data.conversationSid,
+        recipientUsername: data.recipientUsername,
+        recipientAvatar: data.recipientAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.recipientUsername)}&background=808080&color=fff`,
+        isGroup: false,
+      });
+    }
+  };
+
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => {
+        isReadyRef.current = true;
+      }}
+    >
       <AppNavigator />
     </NavigationContainer>
+
   );
 }

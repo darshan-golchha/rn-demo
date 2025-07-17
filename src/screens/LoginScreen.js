@@ -26,8 +26,8 @@ export default function LoginScreen({ navigation, setIsLoggedIn }) {
 
     try {
       const fcm_token = await messaging().getToken();
-      const response = await fetch(`https://conv-backend.darshangolchha.com/api/auth/login`, {
-      // const response = await fetch('http://192.168.29.196:8080/api/auth/login', {
+      // const response = await fetch(`https://conv-backend.darshangolchha.com/api/auth/login`, {
+      const response = await fetch('http://192.168.29.196:8080/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
