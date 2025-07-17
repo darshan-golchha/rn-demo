@@ -458,8 +458,8 @@ const ChatScreen = ({ route, navigation }) => {
   const fetchAvailableUsers = async () => {
     try {
       const token = await require('../engine/token').getToken("token");
-      // const response = await fetch('https://conv-backend.darshangolchha.com/api/users/all', {
-      const response = await fetch('http://192.168.29.196:8080/api/users/all', {
+      const response = await fetch('https://conv-backend.darshangolchha.com/api/users/all', {
+      // const response = await fetch('http://192.168.29.196:8080/api/users/all', {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -502,8 +502,8 @@ const ChatScreen = ({ route, navigation }) => {
                 : [];
             }
             if (participantsToNotify.length > 0) {
-              fetch('http://192.168.29.196:8080/api/auth/event', {
-                // fetch('https://conv-backend.darshangolchha.com/api/auth/event', {
+              // fetch('http://192.168.29.196:8080/api/auth/event', {
+                fetch('https://conv-backend.darshangolchha.com/api/auth/event', {
                 method: 'POST',
                 headers: {
                   Authorization: `Bearer ${token}`,
